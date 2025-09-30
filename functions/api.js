@@ -14,7 +14,7 @@ export async function onRequestPost(context) {
     return new Response(await resp.text(), {
       headers: {
         "Content-Type": "application/json",
-        "Access-Control-Allow-Origin": "https://railbuddy.pages.dev", // your site
+        "Access-Control-Allow-Origin": "https://railbuddy.pages.dev"
       },
     });
   } catch (err) {
@@ -22,7 +22,7 @@ export async function onRequestPost(context) {
       status: 500,
       headers: {
         "Content-Type": "application/json",
-        "Access-Control-Allow-Origin": "https://railbuddy.pages.dev",
+        "Access-Control-Allow-Origin": "https://railbuddy.pages.dev"
       },
     });
   }
