@@ -181,7 +181,7 @@
 
       try{
         // ✅ Use your Cloudflare Worker proxy instead of direct OpenAI API
-        const response=await fetch("railbuddy.pages.dev",{
+        const response=await fetch("/api",{
           method:"POST",
           headers:{ "Content-Type":"application/json" },
           body:JSON.stringify({ model:"gpt-5-omini", messages })
