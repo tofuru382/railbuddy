@@ -163,34 +163,37 @@
       }, {enableHighAccuracy:true,timeout:6000});
     }
 
-    async function askGPT(question){
-      const messages=[
-        { role:"system", content:"You are a train assistant for foreign tourists in Japan." },
-        { role:"user", content:`Question: ${question}\nLocation: ${lastLocationData ? lastLocationData.address : "Unknown"}\nCoordinates: ${lastLocationData ? lastLocationData.lat+","+lastLocationData.lon : "N/A"}` }
-      ];
+    async function askGPT(question) {
+  const messages = [
+    { role: "system", content: [{ type: "text", text: "You are a train assistant for foreign tourists in Japan." }] },
+    { role: "user", content: [{ type: "text", text: question }] }
+  ];
 
-      if(lastImageData){
-        messages.push({
-          role:"user",
-          content:[
-            { type:"text", text:"Here is the image I took of the station sign:" },
-            { type:"image_url", image_url:{ url:lastImageData } }
-          ]
-        });
-      }
+  try {
+    const resp = await fetch("/api", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ model: "gpt-4o-mini", messages })
+    });
 
-      try{
-        // ✅ Use your Cloudflare Worker proxy instead of direct OpenAI API
-        const response=await fetch("/api",{
-          method:"POST",
-          headers:{ "Content-Type":"application/json" },
-          body:JSON.stringify({ model:"gpt-5", messages })
-        });
-        const data=await response.json();
-        return data.choices[0].message.content;
-      }catch(err){ console.error(err); return "⚠️ Error fetching response."; }
+    const data = await resp.json();
+
+    if (data.error) {
+      return `⚠️ API Error: ${data.error.message}`;
     }
 
+    if (data.choices?.[0]?.message?.content) {
+      return data.choices[0].message.content;
+    }
+
+    return "⚠️ Unexpected API response: " + JSON.stringify(data);
+  } catch (err) {
+    console.error(err);
+    return "⚠️ Error fetching response.";
+  }
+}
+
+    
     zoomInBtn.onclick=()=>{if(!currentTrack)return;const caps=currentTrack.getCapabilities?currentTrack.getCapabilities():{};if(caps.zoom){const s=currentTrack.getSettings();const next=Math.min((s.zoom||1)+0.2,caps.zoom.max);currentTrack.applyConstraints({advanced:[{zoom:next}]});}};
     zoomOutBtn.onclick=()=>{if(!currentTrack)return;const caps=currentTrack.getCapabilities?currentTrack.getCapabilities():{};if(caps.zoom){const s=currentTrack.getSettings();const next=Math.max((s.zoom||1)-0.2,caps.zoom.min);currentTrack.applyConstraints({advanced:[{zoom:next}]});}};
     flickerBtn.onclick=()=>{addMsg('Anti-flicker toggle pressed.','bot');};
