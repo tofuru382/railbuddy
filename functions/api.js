@@ -11,7 +11,9 @@ export async function onRequestPost(context) {
       body: JSON.stringify(body),
     });
 
-    return new Response(await resp.text(), {
+    const data = await resp.json();
+
+    return new Response(JSON.stringify(data), {
       headers: {
         "Content-Type": "application/json",
         "Access-Control-Allow-Origin": "https://railbuddy.pages.dev"
