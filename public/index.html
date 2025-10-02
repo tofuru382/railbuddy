@@ -110,7 +110,7 @@
     const cameraLamp=document.getElementById('cameraLamp');
     const locationLamp=document.getElementById('locationLamp');
 
-    let stream;let usingRear=true;let currentTrack;let currentZoom=1;let maxZoom=1;let isPortrait=false;
+    let stream;let usingRear=true;let currentTrack;let currentZoom=1;let maxZoom=1;
     let lastImageData=null;
     let lastLocationData=null;
 
@@ -149,8 +149,12 @@
         const lat=pos.coords.latitude,lon=pos.coords.longitude;
         locationLamp.classList.add('allowed');
         let addr=`${lat.toFixed(5)}, ${lon.toFixed(5)}`;
-        try{ const r=await fetch(`https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lon}`); const j=await r.json(); if(j.display_name) addr=j.display_name; }
-        catch(e){}
+        try{ 
+          const r=await fetch(`https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lon}`, {
+            headers: { "User-Agent": "TrainAssistant/1.0" }
+          }); 
+          const j=await r.json(); if(j.display_name) addr=j.display_name; 
+        } catch(e){}
         lastLocationData={ lat, lon, address:addr };
 
         addMsg(`<div><img src="${dataURL}" style="max-width:100%;border-radius:6px"></div>
@@ -164,40 +168,39 @@
     }
 
     async function askGPT(question) {
-  const messages = [
-    { role: "system", content: [{ type: "text", text: "You are a train assistant for foreign tourists in Japan." }] },
-    { role: "user", content: [{ type: "text", text: question }] }
-  ];
+      const messages = [
+        { role: "system", content: "You are a train assistant for foreign tourists in Japan." },
+        { role: "user", content: question }
+      ];
 
-  try {
-    const resp = await fetch("/api", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ model: "gpt-4o-mini", messages })
-    });
+      try {
+        const resp = await fetch("/api", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ model: "gpt-4o-mini", messages })
+        });
 
-    const data = await resp.json();
+        const data = await resp.json();
 
-    if (data.error) {
-      return `⚠️ API Error: ${data.error.message}`;
+        if (data.error) {
+          return `⚠️ API Error: ${data.error.message}`;
+        }
+
+        if (data.choices?.[0]?.message?.content) {
+          return data.choices[0].message.content;
+        }
+
+        return "⚠️ Unexpected API response: " + JSON.stringify(data);
+      } catch (err) {
+        console.error(err);
+        return "⚠️ Error fetching response.";
+      }
     }
 
-    if (data.choices?.[0]?.message?.content) {
-      return data.choices[0].message.content;
-    }
-
-    return "⚠️ Unexpected API response: " + JSON.stringify(data);
-  } catch (err) {
-    console.error(err);
-    return "⚠️ Error fetching response.";
-  }
-}
-
-    
     zoomInBtn.onclick=()=>{if(!currentTrack)return;const caps=currentTrack.getCapabilities?currentTrack.getCapabilities():{};if(caps.zoom){const s=currentTrack.getSettings();const next=Math.min((s.zoom||1)+0.2,caps.zoom.max);currentTrack.applyConstraints({advanced:[{zoom:next}]});}};
-    zoomOutBtn.onclick=()=>{if(!currentTrack)return;const caps=currentTrack.getCapabilities?currentTrack.getCapabilities():{};if(caps.zoom){const s=currentTrack.getSettings();const next=Math.max((s.zoom||1)-0.2,caps.zoom.min);currentTrack.applyConstraints({advanced:[{zoom:next}]});}};
+    zoomOutBtn.onclick=()=>{if(!currentTrack)return;const caps=currentTrack.getCapabilities?currentTrack.getCapabilities():{};if(caps.zoom){const s=currentTrack.getSettings();const next=Math.max((s.zoom||1)-0.2,caps.zoom?.min||1);currentTrack.applyConstraints({advanced:[{zoom:next}]});}};
     flickerBtn.onclick=()=>{addMsg('Anti-flicker toggle pressed.','bot');};
-    toggleSizeBtn.onclick=()=>{isPortrait=!isPortrait;previewBox.style.height=isPortrait?'400px':'220px';};
+    toggleSizeBtn.onclick=()=>{previewBox.classList.toggle('expanded');};
     switchBtn.onclick=()=>{usingRear=!usingRear;initCamera(usingRear?'environment':'user');};
     captureBtn.onclick=captureNow;
 
@@ -211,11 +214,18 @@
     menuBtn.onclick=()=>{menu.style.display=(menu.style.display==='block'?'none':'block');};
     clearBtn.onclick=()=>{chat.innerHTML='';menu.style.display='none';};
 
+    // Close menu on outside click
+    document.addEventListener('click', e => {
+      if (!menu.contains(e.target) && e.target !== menuBtn) {
+        menu.style.display = 'none';
+      }
+    });
+
     // Mic support
-    window.SpeechRecognition=window.SpeechRecognition||window.webkitSpeechRecognition;
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
     let recognition;
-    if('SpeechRecognition'in window||'webkitSpeechRecognition'in window){
-      recognition=new window.SpeechRecognition();
+    if(SR){
+      recognition=new SR();
       recognition.lang='en-US';
       recognition.continuous=false;
       recognition.interimResults=false;
@@ -238,3 +248,4 @@
   </script>
 </body>
 </html>
+
