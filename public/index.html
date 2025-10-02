@@ -168,34 +168,47 @@
     }
 
     async function askGPT(question) {
-      const messages = [
-        { role: "system", content: "You are a train assistant for foreign tourists in Japan." },
-        { role: "user", content: question }
-      ];
+  const messages = [
+    { role: "system", content: "You are a train assistant for foreign tourists in Japan." },
+    { role: "user", content: question }
+  ];
 
-      try {
-        const resp = await fetch("/api", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ model: "gpt-4o-mini", messages })
-        });
+  try {
+    const resp = await fetch("/api", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ model: "gpt-4o-mini", messages })
+    });
 
-        const data = await resp.json();
-
-        if (data.error) {
-          return `⚠️ API Error: ${data.error.message}`;
-        }
-
-        if (data.choices?.[0]?.message?.content) {
-          return data.choices[0].message.content;
-        }
-
-        return "⚠️ Unexpected API response: " + JSON.stringify(data);
-      } catch (err) {
-        console.error(err);
-        return "⚠️ Error fetching response.";
-      }
+    if (!resp.ok) {
+      return `⚠️ API Error: HTTP ${resp.status} ${resp.statusText}`;
     }
+
+    const data = await resp.json();
+    console.log("API response:", data); // 👈 log full response for debugging
+
+    if (data.error) {
+      return `⚠️ API Error: ${data.error.message || JSON.stringify(data.error)}`;
+    }
+
+    // ✅ Handle both new and old formats
+    const choice = data.choices?.[0];
+    if (choice?.message?.content) {
+      return choice.message.content;
+    }
+    if (choice?.message?.[0]?.text) {
+      return choice.message[0].text;
+    }
+    if (choice?.delta?.content) {
+      return choice.delta.content;
+    }
+
+    return "⚠️ Unexpected API response: " + JSON.stringify(data, null, 2);
+  } catch (err) {
+    console.error("Network/API fetch error:", err);
+    return "⚠️ Network error: " + (err.message || err.toString());
+  }
+}
 
     zoomInBtn.onclick=()=>{if(!currentTrack)return;const caps=currentTrack.getCapabilities?currentTrack.getCapabilities():{};if(caps.zoom){const s=currentTrack.getSettings();const next=Math.min((s.zoom||1)+0.2,caps.zoom.max);currentTrack.applyConstraints({advanced:[{zoom:next}]});}};
     zoomOutBtn.onclick=()=>{if(!currentTrack)return;const caps=currentTrack.getCapabilities?currentTrack.getCapabilities():{};if(caps.zoom){const s=currentTrack.getSettings();const next=Math.max((s.zoom||1)-0.2,caps.zoom?.min||1);currentTrack.applyConstraints({advanced:[{zoom:next}]});}};
