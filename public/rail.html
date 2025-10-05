@@ -79,7 +79,6 @@
     <div class="topbar">
       <button class="menu-btn" id="menuBtn"><i class="fas fa-ellipsis-h"></i></button>
       <div class="menu" id="menu">
-        <button id="settingsBtn"><i class="fas fa-cog"></i> Settings</button>
         <button id="clearBtn"><i class="fas fa-trash"></i> Clear Messages</button>
         <div class="lampRow"><div id="cameraLamp" class="lamp"></div> Camera</div>
         <div class="lampRow"><div id="locationLamp" class="lamp"></div> Location</div>
@@ -91,26 +90,23 @@
         <video id="camera" autoplay playsinline muted></video>
       </div>
       <div class="previewControls">
-        <button id="zoomIn" class="btnControl ghost"><i class="fas fa-search-plus"></i></button>
-        <button id="zoomOut" class="btnControl ghost"><i class="fas fa-search-minus"></i></button>
-        <button id="flicker" class="btnControl blue" style="font-size:12px;">Anti-Flickering</button>
         <button id="toggleSize" class="btnControl ghost"><i class="fas fa-expand-arrows-alt"></i></button>
         <button id="switchCamera" class="btnControl ghost"><i class="fas fa-sync-alt"></i></button>
+        <button id="capture" class="btnControl blue"><i class="fas fa-camera"></i></button>
       </div>
     </section>
 
     <main id="chat" class="chat">
       <div class="row bot">
-        <div class="bubble">Welcome! I’ll help you read station signs or train info. Capture a sign to get detailed guidance.</div>
+        <div class="bubble">Welcome! I’m a station staff assistant. Please capture a sign or ask your question.</div>
       </div>
     </main>
 
     <footer class="inputBar">
       <div class="inputWrap">
-        <input id="userInput" class="textIn" placeholder="Message…" autocomplete="off" />
+        <input id="userInput" class="textIn" placeholder="Ask about a sign…" autocomplete="off" />
         <button id="micBtn" class="micIcon"><i class="fas fa-microphone"></i></button>
       </div>
-      <button id="capture" class="btnGhost"><i class="fas fa-camera"></i></button>
       <button id="send" class="btnBlue"><i class="fas fa-paper-plane"></i></button>
     </footer>
   </div>
@@ -121,19 +117,17 @@
     const video=document.getElementById('camera');
     const chat=document.getElementById('chat');
     const input=document.getElementById('userInput');
-    const previewBox=document.getElementById('previewBox');
     const canvas=document.getElementById('snapshot');
     const captureBtn=document.getElementById('capture');
-    const micBtn=document.getElementById('micBtn');
     const sendBtn=document.getElementById('send');
+    const micBtn=document.getElementById('micBtn');
     const cameraLamp=document.getElementById('cameraLamp');
     const locationLamp=document.getElementById('locationLamp');
-    const menu=document.getElementById('menu');
-    const menuBtn=document.getElementById('menuBtn');
-    const clearBtn=document.getElementById('clearBtn');
     const toggleSizeBtn=document.getElementById('toggleSize');
     const switchBtn=document.getElementById('switchCamera');
-    const flickerBtn=document.getElementById('flicker');
+    const clearBtn=document.getElementById('clearBtn');
+    const menuBtn=document.getElementById('menuBtn');
+    const menu=document.getElementById('menu');
 
     let stream; let usingRear=true; let isCapturing=false;
 
@@ -195,7 +189,19 @@
 
     async function askGPT(question){
       const messages=[
-        {role:"system",content:"You are a helpful train assistant for tourists in Japan."},
+        {role:"system",content:`Role:
+You are a station staff member in Japan who assists foreign visitors at train stations.
+Behavior Rules:
+1. If the user sends only an image, reply briefly to confirm receipt (e.g., “I’ve received your photo. Please tell me your question.”).
+2. After receiving a question, use the image and GPS data to understand the situation and answer.
+3. Always give the conclusion first, then provide a short and clear explanation.
+4. Keep responses simple, polite, and easy to understand in English.
+5. Do not add unnecessary text, emojis, or translations unless asked.
+6. Focus on providing accurate information and ensure sources can be referenced.(no need to show)
+Language:
+Respond only in English.
+Tone:
+Helpful, calm, and concise — like a professional station attendant assisting a traveler.`},
         {role:"user",content:question}
       ];
       try{
@@ -208,21 +214,32 @@
       }catch(err){return "⚠️ "+err.message;}
     }
 
-    // ✅ fixed multimodal format
     async function askGPTWithImage(imageData,lat,lon,address){
       const messages=[{
         role:"system",
-        content:"You are an AI that explains Japanese train station signs to tourists. Use the photo and GPS info to provide accurate guidance."
+        content:`Role:
+You are a station staff member in Japan who assists foreign visitors at train stations.
+Behavior Rules:
+1. If the user sends only an image, reply briefly to confirm receipt (e.g., “I’ve received your photo. Please tell me your question.”).
+2. After receiving a question, use the image and GPS data to understand the situation and answer.
+3. Always give the conclusion first, then provide a short and clear explanation.
+4. Keep responses simple, polite, and easy to understand in English.
+5. Do not add unnecessary text, emojis, or translations unless asked.
+6. Focus on providing accurate information and ensure sources can be referenced.(no need to show)
+Language:
+Respond only in English.
+Tone:
+Helpful, calm, and concise — like a professional station attendant assisting a traveler.`
       },{
         role:"user",
         content:[
-          {type:"text",text:`This image was taken at ${address||"an unknown location"} (${lat||"?"}, ${lon||"?"}). Please describe the sign and guide the user clearly.`},
+          {type:"text",text:`This image was taken at ${address||"an unknown location"} (${lat||"?"}, ${lon||"?"}). Please analyze the sign and give your response following the station staff behavior rules.`},
           {type:"image_url",image_url:{url:imageData}}
         ]
       }];
       try{
         const resp=await fetch("/api",{method:"POST",headers:{"Content-Type":"application/json"},
-          body:JSON.stringify({model:"gpt-4o-mini",messages})});
+          body:JSON.stringify({model:"gpt-5",messages})});
         const data=await resp.json();
         if(data.error)return "⚠️ API Error: "+data.error.message;
         const content=data.choices?.[0]?.message?.content;
@@ -230,15 +247,13 @@
       }catch(err){return "⚠️ "+err.message;}
     }
 
-    // --- UI buttons ---
     captureBtn.onclick=captureNow;
     sendBtn.onclick=async()=>{const t=input.value.trim();if(!t)return;addMsg(t,"user");input.value="";addMsg(await askGPT(t),"bot");};
-    menuBtn.onclick=()=>{menu.style.display=menu.style.display==='block'?'none':'block';};
-    clearBtn.onclick=()=>{chat.innerHTML='';menu.style.display='none';};
-    document.addEventListener('click',e=>{if(!menu.contains(e.target)&&e.target!==menuBtn)menu.style.display='none';});
-    toggleSizeBtn.onclick=()=>{previewBox.classList.toggle("expanded");};
+    toggleSizeBtn.onclick=()=>{document.getElementById('previewBox').classList.toggle("expanded");};
     switchBtn.onclick=()=>{usingRear=!usingRear;initCamera(usingRear?"environment":"user");};
-    flickerBtn.onclick=()=>{addMsg("Anti-flicker toggle pressed.","bot");};
+    clearBtn.onclick=()=>{chat.innerHTML='';menu.style.display='none';};
+    menuBtn.onclick=()=>{menu.style.display=menu.style.display==='block'?'none':'block';};
+    document.addEventListener('click',e=>{if(!menu.contains(e.target)&&e.target!==menuBtn)menu.style.display='none';});
 
     // Speech recognition
     const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
@@ -252,7 +267,6 @@
       micBtn.onclick=()=>{recognition.start();addMsg("🎤 Listening...","bot");};
     }else{micBtn.disabled=true;micBtn.title="Speech recognition not supported";}
 
-    // Init camera
     initCamera('environment');
   </script>
 </body>
