@@ -123,23 +123,19 @@
     const input=document.getElementById('userInput');
     const previewBox=document.getElementById('previewBox');
     const canvas=document.getElementById('snapshot');
-
-    const zoomInBtn=document.getElementById('zoomIn');
-    const zoomOutBtn=document.getElementById('zoomOut');
-    const flickerBtn=document.getElementById('flicker');
-    const toggleSizeBtn=document.getElementById('toggleSize');
-    const switchBtn=document.getElementById('switchCamera');
     const captureBtn=document.getElementById('capture');
-    const sendBtn=document.getElementById('send');
-    const menuBtn=document.getElementById('menuBtn');
-    const menu=document.getElementById('menu');
-    const clearBtn=document.getElementById('clearBtn');
     const micBtn=document.getElementById('micBtn');
+    const sendBtn=document.getElementById('send');
     const cameraLamp=document.getElementById('cameraLamp');
     const locationLamp=document.getElementById('locationLamp');
+    const menu=document.getElementById('menu');
+    const menuBtn=document.getElementById('menuBtn');
+    const clearBtn=document.getElementById('clearBtn');
+    const toggleSizeBtn=document.getElementById('toggleSize');
+    const switchBtn=document.getElementById('switchCamera');
+    const flickerBtn=document.getElementById('flicker');
 
-    let stream; let usingRear=true; let currentTrack;
-    let isCapturing=false;
+    let stream; let usingRear=true; let isCapturing=false;
 
     function addMsg(html,who='user'){
       const row=document.createElement('div');
@@ -157,12 +153,11 @@
         cameraLamp.classList.add('allowed');
       }catch{
         try{ stream=await navigator.mediaDevices.getUserMedia({video:true}); cameraLamp.classList.add('allowed'); }
-        catch(err){ console.error(err); cameraLamp.classList.add('denied'); addMsg("📷 Camera error: "+err.message,'bot'); }
+        catch(err){ cameraLamp.classList.add('denied'); addMsg("📷 Camera error: "+err.message,'bot'); }
       }
-      if(stream){ video.srcObject=stream; currentTrack=stream.getVideoTracks()[0]; }
+      if(stream){ video.srcObject=stream; }
     }
 
-    // --- Capture with 2s cooldown + GPS + image send
     async function captureNow(){
       if(isCapturing){ addMsg("⏳ Please wait 2 seconds before taking another photo.","bot"); return; }
       if(!stream){ addMsg("Camera not ready.","bot"); return; }
@@ -205,7 +200,7 @@
       ];
       try{
         const resp=await fetch("/api",{method:"POST",headers:{"Content-Type":"application/json"},
-          body:JSON.stringify({model:"gpt-4o-mini",messages})});
+          body:JSON.stringify({model:"gpt-5",messages})});
         const data=await resp.json();
         if(data.error)return "⚠️ API Error: "+data.error.message;
         const content=data.choices?.[0]?.message?.content;
@@ -213,6 +208,7 @@
       }catch(err){return "⚠️ "+err.message;}
     }
 
+    // ✅ fixed multimodal format
     async function askGPTWithImage(imageData,lat,lon,address){
       const messages=[{
         role:"system",
@@ -220,8 +216,8 @@
       },{
         role:"user",
         content:[
-          {type:"text",text:`This image was taken at ${address||"an unknown location"}. Please describe the sign and help the user understand what it means.`},
-          {type:"image_url",image_url:imageData}
+          {type:"text",text:`This image was taken at ${address||"an unknown location"} (${lat||"?"}, ${lon||"?"}). Please describe the sign and guide the user clearly.`},
+          {type:"image_url",image_url:{url:imageData}}
         ]
       }];
       try{
@@ -235,16 +231,14 @@
     }
 
     // --- UI buttons ---
-    zoomInBtn.onclick=()=>{addMsg("🔍 Zoom +","bot");};
-    zoomOutBtn.onclick=()=>{addMsg("🔎 Zoom -","bot");};
-    flickerBtn.onclick=()=>{addMsg("Anti-flicker toggle pressed.","bot");};
-    toggleSizeBtn.onclick=()=>{previewBox.classList.toggle("expanded");};
-    switchBtn.onclick=()=>{usingRear=!usingRear;initCamera(usingRear?"environment":"user");};
     captureBtn.onclick=captureNow;
     sendBtn.onclick=async()=>{const t=input.value.trim();if(!t)return;addMsg(t,"user");input.value="";addMsg(await askGPT(t),"bot");};
     menuBtn.onclick=()=>{menu.style.display=menu.style.display==='block'?'none':'block';};
     clearBtn.onclick=()=>{chat.innerHTML='';menu.style.display='none';};
     document.addEventListener('click',e=>{if(!menu.contains(e.target)&&e.target!==menuBtn)menu.style.display='none';});
+    toggleSizeBtn.onclick=()=>{previewBox.classList.toggle("expanded");};
+    switchBtn.onclick=()=>{usingRear=!usingRear;initCamera(usingRear?"environment":"user");};
+    flickerBtn.onclick=()=>{addMsg("Anti-flicker toggle pressed.","bot");};
 
     // Speech recognition
     const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
