@@ -182,7 +182,8 @@ async function captureNow(){
 // GPT with memory
 async function askGPT(){
   const resp=await fetch("/api",{method:"POST",headers:{"Content-Type":"application/json"},
-    body:JSON.stringify({model:"gpt-5",messages:chatHistory.slice(-20)})});
+    body:JSON.stringify({model:"gpt-5-mini
+      ",messages:chatHistory.slice(-20)})});
   const data=await resp.json();
   const answer=data.choices?.[0]?.message?.content||"⚠️ No response.";
   chatHistory.push({ role:"assistant", content:answer });
