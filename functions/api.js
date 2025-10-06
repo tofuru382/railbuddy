@@ -1,14 +1,25 @@
 export async function onRequestPost(context) {
   try {
     const body = await context.request.json();
-    console.log("✅ Worker invoked");
-    console.log("Body:", body);
 
-    if (!context.env.OPEN_AI_API_KEY) {
-      console.error("❌ Missing OPEN_AI_API_KEY");
-      return new Response(JSON.stringify({ error: "No API key found in env" }), { status: 500 });
+    // ---- System prompt (station staff role) ----
+    const systemPrompt = `You are a Japanese station staff helping foreign visitors.
+If only an image is sent, confirm receipt and wait for a question.
+Use the image and GPS data to answer questions.
+Always give the conclusion first.
+Respond simply and clearly in English.`;
+
+    // ---- Inject prompt if not included ----
+    if (Array.isArray(body.messages)) {
+      const hasSystem = body.messages.some(m => m.role === "system");
+      if (!hasSystem) {
+        body.messages.unshift({ role: "system", content: systemPrompt });
+      }
+    } else {
+      body.messages = [{ role: "system", content: systemPrompt }];
     }
 
+    // ---- Call OpenAI ----
     const resp = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
       headers: {
@@ -17,23 +28,36 @@ export async function onRequestPost(context) {
       },
       body: JSON.stringify({
         model: "gpt-5-mini",
-        messages: body.messages || [{ role: "user", content: "Ping" }],
-        stream: false,
+        messages: body.messages,
+        temperature: 0.4,
+        top_p: 0.8,
       }),
     });
 
-    console.log("Upstream status:", resp.status);
-    const txt = await resp.text();
-    console.log("Upstream response:", txt.slice(0, 300)); // only log first 300 chars
+    // ---- Parse response ----
+    const data = await resp.json();
 
-    return new Response(txt, {
+    if (!resp.ok) {
+      console.error("OpenAI API error:", data);
+      return new Response(JSON.stringify({ error: data.error || data }), {
+        status: resp.status,
+        headers: {
+          "Content-Type": "application/json",
+          "Access-Control-Allow-Origin": "https://railbuddy.pages.dev",
+        },
+      });
+    }
+
+    // ---- Return response to client ----
+    return new Response(JSON.stringify(data), {
       headers: {
         "Content-Type": "application/json",
         "Access-Control-Allow-Origin": "https://railbuddy.pages.dev",
       },
     });
+
   } catch (err) {
-    console.error("Worker caught error:", err);
+    console.error("Worker error:", err);
     return new Response(JSON.stringify({ error: err.message }), {
       status: 500,
       headers: {
