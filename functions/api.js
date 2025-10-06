@@ -7,7 +7,7 @@ export async function onRequestPost(context) {
 If only an image is sent, confirm receipt and wait for a question.
 Use the image and GPS data to answer questions.
 Always give the conclusion first.
-Respond simply,shortly and clearly in English.`;
+Respond simply, extremely short and clearly in English.`;
 
     // ---- Inject prompt if missing ----
     if (Array.isArray(body.messages)) {
