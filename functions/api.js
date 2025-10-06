@@ -36,7 +36,7 @@ Respond simply and clearly in English.`;
     const resp = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
       headers: {
-        "Authorization": `Bearer ${context.env.OPEN_AI_API_KEY}`,
+        "Authorization": `Bearer ${context.env.	OPEN_AI_API_KEY}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
