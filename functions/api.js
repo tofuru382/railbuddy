@@ -2,14 +2,14 @@ export async function onRequestPost(context) {
   try {
     const body = await context.request.json();
 
-    // ---- System prompt (station staff role) ----
+    // ---- Station staff system prompt ----
     const systemPrompt = `You are a Japanese station staff helping foreign visitors.
 If only an image is sent, confirm receipt and wait for a question.
 Use the image and GPS data to answer questions.
 Always give the conclusion first.
 Respond simply and clearly in English.`;
 
-    // ---- Inject prompt if not included ----
+    // ---- Inject prompt if missing ----
     if (Array.isArray(body.messages)) {
       const hasSystem = body.messages.some(m => m.role === "system");
       if (!hasSystem) {
@@ -19,7 +19,7 @@ Respond simply and clearly in English.`;
       body.messages = [{ role: "system", content: systemPrompt }];
     }
 
-    // ---- Call OpenAI ----
+    // ---- Send request to OpenAI (no unsupported parameters) ----
     const resp = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
       headers: {
@@ -29,12 +29,9 @@ Respond simply and clearly in English.`;
       body: JSON.stringify({
         model: "gpt-5-mini",
         messages: body.messages,
-        temperature: 0.4,
-        top_p: 0.8,
       }),
     });
 
-    // ---- Parse response ----
     const data = await resp.json();
 
     if (!resp.ok) {
