@@ -1,19 +1,7 @@
-// Cloudflare Pages Function: /functions/api.js
-export async function onRequestOptions(context) {
-  return new Response(null, {
-    status: 204,
-    headers: {
-      "Access-Control-Allow-Origin": "https://railbuddy.pages.dev",
-      "Access-Control-Allow-Methods": "POST, OPTIONS",
-      "Access-Control-Allow-Headers": "Content-Type, Authorization",
-      "Vary": "Origin",
-    },
-  });
-}
-
 export async function onRequestPost(context) {
   try {
     const body = await context.request.json();
+    console.log("✅ Worker invoked");
 
     const systemPrompt = `You are a Japanese station staff helping foreign visitors.
 If only an image is sent, confirm receipt and wait for a question.
@@ -26,6 +14,7 @@ Respond simply and clearly in English.`;
       messages.unshift({ role: "system", content: systemPrompt });
     }
 
+    // ---- Try calling OpenAI ----
     const resp = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
       headers: {
@@ -35,38 +24,42 @@ Respond simply and clearly in English.`;
       body: JSON.stringify({
         model: "gpt-5-mini",
         messages,
-        stream: true,               // 👈 enable streaming
+        stream: true,
       }),
     });
 
+    // ---- Log everything for debugging ----
+    console.log("Upstream status:", resp.status);
+    const preview = await resp.clone().text();
+    console.log("Upstream preview:", preview.slice(0, 300));
+
     if (!resp.ok) {
-      const errText = await resp.text();
-      return new Response(JSON.stringify({ error: errText || "Upstream error" }), {
-        status: 500,
+      return new Response(JSON.stringify({ error: preview }), {
+        status: resp.status,
         headers: {
           "Content-Type": "application/json",
           "Access-Control-Allow-Origin": "https://railbuddy.pages.dev",
-          "Vary": "Origin",
         },
       });
     }
 
+    // ---- Return stream ----
     return new Response(resp.body, {
       headers: {
         "Content-Type": "text/event-stream",
         "Cache-Control": "no-cache",
         "Connection": "keep-alive",
         "Access-Control-Allow-Origin": "https://railbuddy.pages.dev",
-        "Vary": "Origin",
       },
     });
+
   } catch (err) {
-    return new Response(JSON.stringify({ error: err.message }), {
+    console.error("❌ Worker error:", err);
+    return new Response(JSON.stringify({ error: err.message || String(err) }), {
       status: 500,
       headers: {
         "Content-Type": "application/json",
         "Access-Control-Allow-Origin": "https://railbuddy.pages.dev",
-        "Vary": "Origin",
       },
     });
   }
