@@ -145,8 +145,10 @@ async function askGPTStream(){
       headers:{"Content-Type":"application/json"},
       body:JSON.stringify({model:"gpt-5-mini",messages:chatHistory.slice(-20)})
     });
-
-    
+    if(!resp.ok||!resp.body){
+      addMsg("⚠️ Network or API error.","bot");
+      return;
+    }
     const reader=resp.body.getReader();
     const decoder=new TextDecoder();
     let text="";
