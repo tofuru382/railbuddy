@@ -1,20 +1,37 @@
+// Cloudflare Pages Function: /functions/api.js
+// Streams GPT-5-mini responses token-by-token to the browser
+
+export async function onRequestOptions(context) {
+  // --- CORS preflight ---
+  return new Response(null, {
+    status: 204,
+    headers: {
+      "Access-Control-Allow-Origin": "https://railbuddy.pages.dev", // ← change if using another domain
+      "Access-Control-Allow-Methods": "POST, OPTIONS",
+      "Access-Control-Allow-Headers": "Content-Type, Authorization",
+      "Vary": "Origin",
+    },
+  });
+}
+
 export async function onRequestPost(context) {
   try {
     const body = await context.request.json();
-    console.log("✅ Worker invoked");
 
+    // --- Station staff system prompt ---
     const systemPrompt = `You are a Japanese station staff helping foreign visitors.
 If only an image is sent, confirm receipt and wait for a question.
 Use the image and GPS data to answer questions.
 Always give the conclusion first.
 Respond simply and clearly in English.`;
 
+    // --- Ensure messages array exists & inject system prompt if missing ---
     const messages = Array.isArray(body.messages) ? body.messages : [];
     if (!messages.some(m => m.role === "system")) {
       messages.unshift({ role: "system", content: systemPrompt });
     }
 
-    // ---- Try calling OpenAI ----
+    // --- Call OpenAI Chat Completions with streaming ---
     const resp = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
       headers: {
@@ -24,43 +41,54 @@ Respond simply and clearly in English.`;
       body: JSON.stringify({
         model: "gpt-5-mini",
         messages,
-        stream: true,
+        stream: true, // <— enables token-by-token streaming
       }),
     });
 
-    // ---- Log everything for debugging ----
-    console.log("Upstream status:", resp.status);
-    const preview = await resp.clone().text();
-    console.log("Upstream preview:", preview.slice(0, 300));
-
+    // --- Handle upstream API errors gracefully ---
     if (!resp.ok) {
-      return new Response(JSON.stringify({ error: preview }), {
-        status: resp.status,
-        headers: {
-          "Content-Type": "application/json",
-          "Access-Control-Allow-Origin": "https://railbuddy.pages.dev",
-        },
-      });
+      const errText = await resp.text();
+      console.error("❌ OpenAI upstream error:", resp.status, errText.slice(0, 300));
+      return new Response(
+        JSON.stringify({
+          error: `Upstream error (${resp.status})`,
+          detail: errText,
+        }),
+        {
+          status: resp.status,
+          headers: {
+            "Content-Type": "application/json",
+            "Access-Control-Allow-Origin": "https://railbuddy.pages.dev",
+          },
+        }
+      );
     }
 
-    // ---- Return stream ----
+    // --- Pass the OpenAI event stream directly to the browser ---
     return new Response(resp.body, {
       headers: {
         "Content-Type": "text/event-stream",
         "Cache-Control": "no-cache",
         "Connection": "keep-alive",
         "Access-Control-Allow-Origin": "https://railbuddy.pages.dev",
+        "Vary": "Origin",
       },
     });
-
   } catch (err) {
+    // --- Worker-level error handling ---
     console.error("❌ Worker error:", err);
-    return new Response(JSON.stringify({ error: err.message || String(err) }), {
-      status: 500,
-      headers: {
-        "Content-Type": "application/json",
-        "Access-Control-Allow-Origin": "https://railbuddy.pages.dev",
-      },
-    });
+    return new Response(
+      JSON.stringify({
+        error: err.message || String(err),
+      }),
+      {
+        status: 500,
+        headers: {
+          "Content-Type": "application/json",
+          "Access-Control-Allow-Origin": "https://railbuddy.pages.dev",
+          "Vary": "Origin",
+        },
+      }
+    );
   }
 }
