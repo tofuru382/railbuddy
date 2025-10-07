@@ -1,24 +1,31 @@
+// Cloudflare Pages Function: /functions/api.js
+export async function onRequestOptions(context) {
+  return new Response(null, {
+    status: 204,
+    headers: {
+      "Access-Control-Allow-Origin": "https://railbuddy.pages.dev",
+      "Access-Control-Allow-Methods": "POST, OPTIONS",
+      "Access-Control-Allow-Headers": "Content-Type, Authorization",
+      "Vary": "Origin",
+    },
+  });
+}
+
 export async function onRequestPost(context) {
   try {
     const body = await context.request.json();
 
-    // ---- Station staff system prompt ----
-    const systemPrompt = `
-You are a Japanese station staff assisting foreign visitors focusing on LED signs and ticket machines. If only an image is sent, wait.  Use image and GPS to answer. Start with the conclusion; keep replies short.
-Details only needed when user asks
- `;
+    const systemPrompt = `You are a Japanese station staff helping foreign visitors.
+If only an image is sent, confirm receipt and wait for a question.
+Use the image and GPS data to answer questions.
+Always give the conclusion first.
+Respond simply and clearly in English.`;
 
-    // ---- Inject prompt if missing ----
-    if (Array.isArray(body.messages)) {
-      const hasSystem = body.messages.some(m => m.role === "system");
-      if (!hasSystem) {
-        body.messages.unshift({ role: "system", content: systemPrompt });
-      }
-    } else {
-      body.messages = [{ role: "system", content: systemPrompt }];
+    const messages = Array.isArray(body.messages) ? body.messages : [];
+    if (!messages.some(m => m.role === "system")) {
+      messages.unshift({ role: "system", content: systemPrompt });
     }
 
-    // ---- Send request to OpenAI (no unsupported parameters) ----
     const resp = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
       headers: {
@@ -27,38 +34,39 @@ Details only needed when user asks
       },
       body: JSON.stringify({
         model: "gpt-5-mini",
-        messages: body.messages,
+        messages,
+        stream: true,               // 👈 enable streaming
       }),
     });
 
-    const data = await resp.json();
-
     if (!resp.ok) {
-      console.error("OpenAI API error:", data);
-      return new Response(JSON.stringify({ error: data.error || data }), {
-        status: resp.status,
+      const errText = await resp.text();
+      return new Response(JSON.stringify({ error: errText || "Upstream error" }), {
+        status: 500,
         headers: {
           "Content-Type": "application/json",
           "Access-Control-Allow-Origin": "https://railbuddy.pages.dev",
+          "Vary": "Origin",
         },
       });
     }
 
-    // ---- Return response to client ----
-    return new Response(JSON.stringify(data), {
+    return new Response(resp.body, {
       headers: {
-        "Content-Type": "application/json",
+        "Content-Type": "text/event-stream",
+        "Cache-Control": "no-cache",
+        "Connection": "keep-alive",
         "Access-Control-Allow-Origin": "https://railbuddy.pages.dev",
+        "Vary": "Origin",
       },
     });
-
   } catch (err) {
-    console.error("Worker error:", err);
     return new Response(JSON.stringify({ error: err.message }), {
       status: 500,
       headers: {
         "Content-Type": "application/json",
         "Access-Control-Allow-Origin": "https://railbuddy.pages.dev",
+        "Vary": "Origin",
       },
     });
   }
