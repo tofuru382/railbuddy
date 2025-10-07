@@ -126,15 +126,42 @@ function clearMemory(){chatHistory=[{role:"system",content:SYSTEM_PROMPT}];saveH
 
 // UI helpers
 function addMsg(html,who='user'){
-  const row=document.createElement('div');row.className='row '+(who==='user'?'user':'bot');
-  const b=document.createElement('div');b.className='bubble';b.innerHTML=html;
-  row.appendChild(b);chat.appendChild(row);chat.scrollTop=chat.scrollHeight;
+  const row=document.createElement('div');
+  row.className='row '+(who==='user'?'user':'bot');
+  const b=document.createElement('div');
+  b.className='bubble';
+  b.innerHTML=html;
+  row.appendChild(b);
+  chat.appendChild(row);
+  chat.scrollTop=chat.scrollHeight;
   return b;
 }
 function addTyping(){
-  const row=document.createElement('div');row.className='row bot';
-  const b=document.createElement('div');b.className='bubble typing';b.textContent='Typing...';
-  row.appendChild(b);chat.appendChild(row);chat.scrollTop=chat.scrollHeight;return b;
+  const row=document.createElement('div');
+  row.className='row bot';
+  const b=document.createElement('div');
+  b.className='bubble typing';
+  b.textContent='Typing...';
+  row.appendChild(b);
+  chat.appendChild(row);
+  chat.scrollTop=chat.scrollHeight;
+  return b;
+}
+
+// Convert history to text-only (strip images)
+function sanitizeMessages(){
+  return chatHistory.slice(-20).map(m=>{
+    if(typeof m.content==="string") return m;
+    if(Array.isArray(m.content)){
+      const text=m.content.map(c=>{
+        if(c.type==="text") return c.text;
+        if(c.type==="image_url") return "[User attached a photo]";
+        return "";
+      }).join(" ");
+      return {role:m.role,content:text};
+    }
+    return {role:m.role,content:String(m.content||"")};
+  });
 }
 
 // Streaming GPT call
@@ -143,14 +170,14 @@ async function askGPTStream(){
     const resp=await fetch("/api",{
       method:"POST",
       headers:{"Content-Type":"application/json"},
-      body:JSON.stringify({model:"gpt-5-mini",messages:chatHistory.slice(-20)})
+      body:JSON.stringify({model:"gpt-5-mini",messages:sanitizeMessages()})
     });
-   if(!resp.ok){
-      let detail="";
-      try{const data=await resp.json();detail=data?.error||JSON.stringify(data);}catch{detail=await resp.text();}
-      addMsg(`⚠️ API error (${resp.status}): ${detail||"Unknown error"}.`,`bot`);
+
+    if(!resp.ok||!resp.body){
+      addMsg("⚠️ Network or API error.","bot");
       return;
     }
+
     const reader=resp.body.getReader();
     const decoder=new TextDecoder();
     let text="";
@@ -242,20 +269,20 @@ async function captureNow(){
     }catch{}
     addMsg(`<div><img src="${dataURL}" style="max-width:100%;border-radius:6px"></div>
             <div class='meta'><i class='fas fa-map-marker-alt'></i> ${addr}</div>`,'user');
-    chatHistory.push({role:"user",content:[
-      {type:"text",text:`Photo taken at ${addr} (${lat},${lon})`},
-      {type:"image_url",image_url:{url:dataURL}}
-    ]});
+    chatHistory.push({
+      role:"user",
+      content:`[Photo taken near ${addr} (${lat},${lon}) attached.]`
+    });
     saveHistory();
     await askGPTStream();
   },err=>{
     locationLamp.classList.add("denied");
     addMsg(`<div><img src="${dataURL}" style="max-width:100%;border-radius:6px"></div>
             <div class='meta'><i class='fas fa-map-marker-alt'></i> No location (${err.message})</div>`,'user');
-    chatHistory.push({role:"user",content:[
-      {type:"text",text:"Photo with no GPS"},
-      {type:"image_url",image_url:{url:dataURL}}
-    ]});
+    chatHistory.push({
+      role:"user",
+      content:"[Photo attached, no GPS location.]"
+    });
     saveHistory();
     askGPTStream();
   },{enableHighAccuracy:true,timeout:6000});
@@ -306,6 +333,7 @@ if(SR){
 // Init
 initCamera('environment');
 </script>
+
 
 </body>
 </html>
