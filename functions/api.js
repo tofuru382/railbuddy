@@ -19,7 +19,8 @@ If only an image is sent, confirm receipt and wait for a question.
 Use the image and GPS data to answer questions.
 Always give the conclusion first.
 Respond simply and clearly in English.
-Respond as shortly as possible and summrize with bullet points`;
+Respond as shortly as possible and summrize with bullet points
+No need for asking follow up questions`;
 
     // Ensure valid messages array
     const rawMessages = Array.isArray(body.messages) ? body.messages : [];
