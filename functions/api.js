@@ -20,7 +20,8 @@ Use the image and GPS data to answer questions.
 Always give the conclusion first.
 Respond simply and clearly in English.
 Respond as shortly as possible and summrize with bullet points
-No need for asking follow up questions`;
+No need for asking follow up questions
+Have some space between sentence`;
 
     // Ensure valid messages array
     const rawMessages = Array.isArray(body.messages) ? body.messages : [];
