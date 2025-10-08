@@ -18,7 +18,8 @@ export async function onRequestPost(context) {
 If only an image is sent, confirm receipt and wait for a question.
 Use the image and GPS data to answer questions.
 Always give the conclusion first.
-Respond simply and clearly in English.`;
+Respond simply and clearly in English.
+Respond as shortly as possible and summrize with bullet points`;
 
     // Ensure valid messages array
     const rawMessages = Array.isArray(body.messages) ? body.messages : [];
