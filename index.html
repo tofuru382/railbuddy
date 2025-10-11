@@ -235,7 +235,7 @@ const SYSTEM_PROMPT=`You are a Japanese station staff helping foreign visitors.
 If only an image is sent, say Image Recived and wait for a question.
 Use the image and GPS data(When needed and note that the GPS could be off) to answer questions.
 Always give the conclusion first.
-Respond simply extreamly short and clearly in English.`;
+Respond simply short and clearly in English.`;
 
 let chatHistory=JSON.parse(localStorage.getItem("chatHistory")||"[]");
 if(chatHistory.length===0){chatHistory.push({role:"system",content:SYSTEM_PROMPT});}
