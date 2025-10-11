@@ -214,196 +214,203 @@
   <canvas id="snapshot" style="display:none;"></canvas>
 
   <script>
-    const chat = document.getElementById('chat');
-    const input = document.getElementById('userInput');
-    const canvas = document.getElementById('snapshot');
-    const captureBtn = document.getElementById('capture');
-    const sendBtn = document.getElementById('send');
-    const micBtn = document.getElementById('micBtn');
-    const cameraLamp = document.getElementById('cameraLamp');
-    const locationLamp = document.getElementById('locationLamp');
-    const menu = document.getElementById('menu');
-    const menuBtn = document.getElementById('menuBtn');
-    const clearBtn = document.getElementById('clearBtn');
-    const toggleSizeBtn = document.getElementById('toggleSize');
-    const switchBtn = document.getElementById('switchCamera');
-    const flickerBtn = document.getElementById('flicker');
-    const video = document.getElementById('camera');
+const chat=document.getElementById('chat');
+const input=document.getElementById('userInput');
+const canvas=document.getElementById('snapshot');
+const captureBtn=document.getElementById('capture');
+const sendBtn=document.getElementById('send');
+const micBtn=document.getElementById('micBtn');
+const cameraLamp=document.getElementById('cameraLamp');
+const locationLamp=document.getElementById('locationLamp');
+const menu=document.getElementById('menu');
+const menuBtn=document.getElementById('menuBtn');
+const clearBtn=document.getElementById('clearBtn');
+const toggleSizeBtn=document.getElementById('toggleSize');
+const switchBtn=document.getElementById('switchCamera');
+const flickerBtn=document.getElementById('flicker');
+const video=document.getElementById('camera');
+let stream, usingRear=true, currentTrack, typingTimer=null;
 
-    let stream, usingRear = true, currentTrack, typingTimer = null;
-
-    const SYSTEM_PROMPT = `You are a Japanese station staff helping foreign visitors.
+const SYSTEM_PROMPT=`You are a Japanese station staff helping foreign visitors.
 If only an image is sent, confirm receipt and wait for a question.
 Use the image and GPS data to answer questions.
 Always give the conclusion first.
 Respond simply and clearly in English.`;
 
-    let chatHistory = JSON.parse(localStorage.getItem("chatHistory") || "[]");
-    if (chatHistory.length === 0) chatHistory.push({ role: "system", content: SYSTEM_PROMPT });
-    function saveHistory() { localStorage.setItem("chatHistory", JSON.stringify(chatHistory.slice(-20))); }
-    function clearMemory() { chatHistory = [{ role: "system", content: SYSTEM_PROMPT }]; saveHistory(); }
+let chatHistory=JSON.parse(localStorage.getItem("chatHistory")||"[]");
+if(chatHistory.length===0){chatHistory.push({role:"system",content:SYSTEM_PROMPT});}
+function saveHistory(){localStorage.setItem("chatHistory",JSON.stringify(chatHistory.slice(-20)));}
+function clearMemory(){chatHistory=[{role:"system",content:SYSTEM_PROMPT}];saveHistory();}
 
-    function addMsg(html, who = 'user') {
-      const row = document.createElement('div');
-      row.className = 'row ' + (who === 'user' ? 'user' : 'bot');
-      const b = document.createElement('div');
-      b.className = 'bubble';
-      b.innerHTML = html;
-      row.appendChild(b);
-      chat.appendChild(row);
-      chat.scrollTop = chat.scrollHeight;
-      return b;
-    }
+// --- message helpers ---
+function addMsg(html,who='user'){
+  const row=document.createElement('div');
+  row.className='row '+(who==='user'?'user':'bot');
+  const b=document.createElement('div');
+  b.className='bubble';
+  b.innerHTML=html;
+  row.appendChild(b);
+  chat.appendChild(row);
+  chat.scrollTop=chat.scrollHeight;
+  return b;
+}
 
-    // typing animation
-    function showTyping() {
-      const row = document.createElement('div');
-      row.className = 'row bot';
-      const b = document.createElement('div');
-      b.className = 'bubble typing';
-      b.textContent = 'Typing';
-      row.appendChild(b);
-      chat.appendChild(row);
-      chat.scrollTop = chat.scrollHeight;
-      let dots = 0;
-      typingTimer = setInterval(() => { dots = (dots + 1) % 4; b.textContent = 'Typing' + '.'.repeat(dots); }, 500);
-      return row;
-    }
-    function hideTyping(row) {
-      if (typingTimer) { clearInterval(typingTimer); typingTimer = null; }
-      if (row && row.parentElement) row.remove();
-    }
+// --- typing animation ---
+function showTyping(){
+  const row=document.createElement('div');row.className='row bot';
+  const b=document.createElement('div');b.className='bubble typing';b.textContent='Typing';
+  row.appendChild(b);chat.appendChild(row);chat.scrollTop=chat.scrollHeight;
+  let dots=0;typingTimer=setInterval(()=>{dots=(dots+1)%4;b.textContent='Typing'+'.'.repeat(dots);},500);
+  return row;
+}
+function hideTyping(row){if(typingTimer){clearInterval(typingTimer);typingTimer=null;}if(row&&row.parentElement)row.remove();}
 
-    function sanitizeMessages() {
-      return chatHistory.slice(-20).map(m => {
-        if (typeof m.content === "string") return m;
-        if (Array.isArray(m.content)) {
-          const text = m.content.map(c => c.type === "text" ? c.text : "[Photo attached]").join(" ");
-          return { role: m.role, content: text };
-        }
-        return { role: m.role, content: String(m.content || "") };
-      });
-    }
+// --- prepare messages (multimodal ok) ---
+function sanitizeMessages(){return chatHistory.slice(-20);}
 
-    async function askGPT() {
-      const typingRow = showTyping();
-      try {
-        const resp = await fetch("/api", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ model: "gpt-5-mini", messages: sanitizeMessages() })
-        });
-
-        const data = await resp.json();
-        hideTyping(typingRow);
-
-        if (!resp.ok || data.error) {
-          addMsg("⚠️ API error.", "bot");
-          return;
-        }
-
-        const answer = data.choices?.[0]?.message?.content || "⚠️ No response.";
-        addMsg(answer, "bot");
-        chatHistory.push({ role: "assistant", content: answer });
-        saveHistory();
-      } catch (e) {
-        hideTyping(typingRow);
-        addMsg("⚠️ " + e.message, "bot");
-      }
-    }
-
-    async function initCamera(facing = 'environment') {
-      try {
-        if (stream) stream.getTracks().forEach(t => t.stop());
-        stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { exact: facing } } });
-        cameraLamp.classList.add('allowed');
-      } catch {
-        try {
-          stream = await navigator.mediaDevices.getUserMedia({ video: true });
-          cameraLamp.classList.add('allowed');
-        } catch (e) {
-          cameraLamp.classList.add('denied');
-          addMsg("📷 Camera error: " + e.message, 'bot');
-        }
-      }
-      if (stream) { video.srcObject = stream; currentTrack = stream.getVideoTracks()[0]; }
-    }
-
-    async function captureNow() {
-      if (!stream) { addMsg("Camera not ready.", 'bot'); return; }
-      const w = video.videoWidth || 720, h = video.videoHeight || 1280;
-      canvas.width = w; canvas.height = h; canvas.getContext("2d").drawImage(video, 0, 0, w, h);
-      const dataURL = canvas.toDataURL("image/jpeg", 0.9);
-      navigator.geolocation.getCurrentPosition(async pos => {
-        const lat = pos.coords.latitude, lon = pos.coords.longitude;
-        locationLamp.classList.add("allowed");
-        let addr = `${lat.toFixed(5)}, ${lon.toFixed(5)}`;
-        try {
-          const r = await fetch(`https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lon}`);
-          const j = await r.json();
-          if (j.display_name) addr = j.display_name;
-        } catch { }
-        addMsg(`<div><img src="${dataURL}" style="max-width:100%;border-radius:6px"></div>
-                <div class='meta'><i class='fas fa-map-marker-alt'></i> ${addr}</div>`, 'user');
-        chatHistory.push({ role: "user", content: `[Photo near ${addr} (${lat},${lon}) attached.]` });
-        saveHistory(); askGPT();
-      }, err => {
-        locationLamp.classList.add("denied");
-        addMsg(`<div><img src="${dataURL}" style="max-width:100%;border-radius:6px"></div>
-                <div class='meta'><i class='fas fa-map-marker-alt'></i> No location (${err.message})</div>`, 'user');
-        chatHistory.push({ role: "user", content: "[Photo attached, no GPS.]" });
-        saveHistory(); askGPT();
-      }, { enableHighAccuracy: true, timeout: 6000 });
-    }
-
-    sendBtn.onclick = () => {
-      const t = input.value.trim();
-      if (!t) return;
-      addMsg(t, 'user');
-      chatHistory.push({ role: "user", content: t });
-      saveHistory();
-      input.value = '';
-      askGPT();
-    };
-
-    toggleSizeBtn.onclick = () => { document.getElementById('previewBox').classList.toggle("expanded"); };
-    switchBtn.onclick = () => { usingRear = !usingRear; initCamera(usingRear ? 'environment' : 'user'); };
-    flickerBtn.onclick = () => addMsg("Anti-flicker toggle pressed.", "bot");
-    clearBtn.onclick = () => { chat.innerHTML = ''; clearMemory(); menu.style.display = 'none'; };
-    menuBtn.onclick = () => { menu.style.display = menu.style.display === 'block' ? 'none' : 'block'; };
-    document.addEventListener('click', e => {
-      if (!menu.contains(e.target) && e.target !== menuBtn) menu.style.display = 'none';
+// --- GPT request (non-streaming) ---
+async function askGPT(){
+  const typingRow=showTyping();
+  try{
+    const resp=await fetch("/api",{
+      method:"POST",
+      headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({model:"gpt-4o-mini",messages:sanitizeMessages()})
     });
-    captureBtn.onclick = captureNow;
-    document.getElementById('zoomIn').onclick = () => applyZoom(+0.2);
-    document.getElementById('zoomOut').onclick = () => applyZoom(-0.2);
-
-    async function applyZoom(delta) {
-      if (!currentTrack) return;
-      const caps = currentTrack.getCapabilities?.() || {};
-      if (!caps.zoom) return;
-      const s = currentTrack.getSettings?.() || {};
-      const next = Math.min(caps.zoom.max ?? 1, Math.max(caps.zoom.min ?? 1, (s.zoom ?? 1) + delta));
-      try { await currentTrack.applyConstraints({ advanced: [{ zoom: next }] }); } catch { }
+    const data=await resp.json();
+    hideTyping(typingRow);
+    if(!resp.ok||data.error){
+      const msg=data?.error?.message||data?.error||("HTTP "+resp.status);
+      addMsg("⚠️ API error: "+msg,"bot");
+      return;
     }
+    const answer=data.choices?.[0]?.message?.content||"⚠️ No response.";
+    addMsg(answer,"bot");
+    chatHistory.push({role:"assistant",content:answer});
+    saveHistory();
+  }catch(e){hideTyping(typingRow);addMsg("⚠️ Network or API error: "+e.message,"bot");}
+}
 
-    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (SR) {
-      const rec = new SR(); rec.lang = 'en-US';
-      rec.onresult = e => {
-        const t = e.results[0][0].transcript;
-        addMsg(t, 'user');
-        chatHistory.push({ role: "user", content: t });
-        saveHistory();
-        askGPT();
-      };
-      rec.onerror = e => addMsg("🎤 Error: " + e.error, 'bot');
-      micBtn.onclick = () => { rec.start(); addMsg("🎤 Listening...", "bot"); };
-    } else {
-      micBtn.disabled = true; micBtn.title = "Speech recognition not supported";
+// --- camera init ---
+async function initCamera(facing='environment'){
+  try{
+    if(stream)stream.getTracks().forEach(t=>t.stop());
+    stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:{exact:facing}}});
+    cameraLamp.classList.add('allowed');
+  }catch{
+    try{
+      stream=await navigator.mediaDevices.getUserMedia({video:true});
+      cameraLamp.classList.add('allowed');
+    }catch(err){
+      cameraLamp.classList.add('denied');
+      addMsg("📷 Camera error: "+err.message,'bot');
     }
+  }
+  if(stream){video.srcObject=stream;currentTrack=stream.getVideoTracks()[0];}
+}
 
-    initCamera('environment');
-  </script>
+// --- capture photo + GPS + send ---
+async function captureNow(){
+  if(!stream){addMsg("Camera not ready.","bot");return;}
+  const w=video.videoWidth||720,h=video.videoHeight||1280;
+  canvas.width=w;canvas.height=h;
+  const ctx=canvas.getContext("2d");ctx.drawImage(video,0,0,w,h);
+  const dataURL=canvas.toDataURL("image/jpeg",0.9);
+
+  navigator.geolocation.getCurrentPosition(async pos=>{
+    const lat=pos.coords.latitude,lon=pos.coords.longitude;
+    locationLamp.classList.add("allowed");
+    let addr=`${lat.toFixed(5)}, ${lon.toFixed(5)}`;
+    try{
+      const r=await fetch(`https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lon}`,
+        {headers:{"User-Agent":"TrainAssistant/1.0"}});
+      const j=await r.json();
+      if(j.display_name)addr=j.display_name;
+    }catch{}
+    addMsg(`<div><img src="${dataURL}" style="max-width:100%;border-radius:6px"></div>
+            <div class='meta'><i class='fas fa-map-marker-alt'></i> ${addr}</div>`,'user');
+
+    // send real image + text
+    chatHistory.push({
+      role:"user",
+      content:[
+        {type:"text",text:`Photo taken near ${addr} (${lat},${lon})`},
+        {type:"image_url",image_url:{url:dataURL}}
+      ]
+    });
+    saveHistory();
+    await askGPT();
+  },err=>{
+    locationLamp.classList.add("denied");
+    addMsg(`<div><img src="${dataURL}" style="max-width:100%;border-radius:6px"></div>
+            <div class='meta'><i class='fas fa-map-marker-alt'></i> No location (${err.message})</div>`,'user');
+    chatHistory.push({
+      role:"user",
+      content:[
+        {type:"text",text:"Photo taken (no GPS location)"},
+        {type:"image_url",image_url:{url:dataURL}}
+      ]
+    });
+    saveHistory();
+    askGPT();
+  },{enableHighAccuracy:true,timeout:6000});
+}
+
+// --- send text ---
+sendBtn.onclick=async()=>{
+  const t=input.value.trim();
+  if(!t)return;
+  addMsg(t,'user');
+  chatHistory.push({role:"user",content:t});
+  saveHistory();
+  input.value='';
+  await askGPT();
+};
+
+// --- controls ---
+toggleSizeBtn.onclick=()=>{document.getElementById('previewBox').classList.toggle("expanded");};
+switchBtn.onclick=()=>{usingRear=!usingRear;initCamera(usingRear?'environment':'user');};
+flickerBtn.onclick=()=>addMsg("Anti-flicker toggle pressed.","bot");
+clearBtn.onclick=()=>{chat.innerHTML='';clearMemory();menu.style.display='none';};
+menuBtn.onclick=()=>menu.style.display=menu.style.display==='block'?'none':'block';
+document.addEventListener('click',e=>{
+  if(!menu.contains(e.target)&&e.target!==menuBtn)menu.style.display='none';
+});
+captureBtn.onclick=captureNow;
+document.getElementById('zoomIn').onclick=()=>applyZoom(+0.2);
+document.getElementById('zoomOut').onclick=()=>applyZoom(-0.2);
+
+// --- zoom ---
+async function applyZoom(delta){
+  if(!currentTrack)return;
+  const caps=currentTrack.getCapabilities?.()||{};
+  if(!caps.zoom)return;
+  const s=currentTrack.getSettings?.()||{};
+  const next=Math.min(caps.zoom.max??1,Math.max(caps.zoom.min??1,(s.zoom??1)+delta));
+  try{await currentTrack.applyConstraints({advanced:[{zoom:next}]});}catch{}
+}
+
+// --- speech recognition ---
+const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+if(SR){
+  const rec=new SR();
+  rec.lang='en-US';
+  rec.onresult=async e=>{
+    const t=e.results[0][0].transcript;
+    addMsg(t,'user');
+    chatHistory.push({role:"user",content:t});
+    saveHistory();
+    await askGPT();
+  };
+  rec.onerror=e=>addMsg("🎤 Error: "+e.error,'bot');
+  micBtn.onclick=()=>{rec.start();addMsg("🎤 Listening...","bot");};
+}else{
+  micBtn.disabled=true;micBtn.title="Speech recognition not supported";
+}
+
+// --- init ---
+initCamera('environment');
+</script>
+
 </body>
 </html>
