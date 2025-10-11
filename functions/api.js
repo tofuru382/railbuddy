@@ -41,7 +41,7 @@ full paragraphs or code blocks
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "gpt-5-mini",
+        model: "gpt-5-main",
         messages: body.messages,
       }),
     });
