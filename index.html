@@ -249,7 +249,7 @@ async function askGPT(){
     const resp=await fetch("/api",{
       method:"POST",
       headers:{"Content-Type":"application/json"},
-      body:JSON.stringify({ model:"gpt-5-mini", messages: chatHistory.slice(-20) })
+      body:JSON.stringify({ model:"gpt-5-main", messages: chatHistory.slice(-20) })
     });
     const data=await resp.json();
     if(data.error) return "⚠️ " + (data.error.message || JSON.stringify(data.error));
