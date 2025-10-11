@@ -15,10 +15,10 @@ export async function onRequestPost(context) {
     const body = await context.request.json();
 
     const systemPrompt = `You are a Japanese station staff helping foreign visitors.
-If only an image is sent, confirm receipt and wait for a question.
-Use the image and GPS data to answer questions.
+If only an image is sent, say Image Recived and wait for a question.
+Use the image and GPS data(When needed and note that the GPS could be off) to answer questions.
 Always give the conclusion first.
-Respond simply and clearly in English.`;
+Respond simply extreamly short and clearly in English.`;
 
     const messages = Array.isArray(body.messages) ? body.messages : [];
     if (!messages.some(m => m.role === "system")) {
