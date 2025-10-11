@@ -32,7 +32,7 @@ Respond simply extreamly short and clearly in English.`;
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "gpt-5",
+        model: "gpt-5-nano",
         messages,
       }),
     });
