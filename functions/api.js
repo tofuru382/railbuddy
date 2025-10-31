@@ -2,21 +2,18 @@ export async function onRequestPost(context) {
   try {
     const body = await context.request.json();
 
-    
     const allowedOrigin = "https://railbuddy.pages.dev";
     const origin = context.request.headers.get("Origin");
     if (origin !== allowedOrigin) {
       return new Response("CORS Error: Unauthorized origin", { status: 403 });
     }
 
-    
     const csrfHeader = context.request.headers.get("x-csrf-token");
-    const expectedToken = context.env.CSRF_SECRET; 
+    const expectedToken = context.env.CSRF_SECRET;
     if (!csrfHeader || csrfHeader !== expectedToken) {
       return new Response("CSRF validation failed", { status: 403 });
     }
 
-    // プロンプト
     const systemPrompt = `
 You are a Japanese station staff helping foreign visitors.
 If only an image is sent, confirm receipt and wait for a question.
@@ -28,17 +25,13 @@ Use normal spaces (" "), multiple spaces ("  "), and line breaks (\\n).
 You may also use markdown line breaks (double space + newline) or full paragraphs.
     `;
 
-    
     if (Array.isArray(body.messages)) {
       const hasSystem = body.messages.some(m => m.role === "system");
-      if (!hasSystem) {
-        body.messages.unshift({ role: "system", content: systemPrompt });
-      }
+      if (!hasSystem) body.messages.unshift({ role: "system", content: systemPrompt });
     } else {
       body.messages = [{ role: "system", content: systemPrompt }];
     }
 
-   
     const resp = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
       headers: {
@@ -53,7 +46,6 @@ You may also use markdown line breaks (double space + newline) or full paragraph
 
     const data = await resp.json();
 
-    
     if (!resp.ok) {
       console.error("OpenAI API error:", data);
       return new Response(JSON.stringify({ error: data.error || data }), {
@@ -62,7 +54,6 @@ You may also use markdown line breaks (double space + newline) or full paragraph
       });
     }
 
-   
     return new Response(JSON.stringify(data), {
       status: 200,
       headers: getSecurityHeaders(allowedOrigin),
@@ -77,7 +68,6 @@ You may also use markdown line breaks (double space + newline) or full paragraph
   }
 }
 
-
 export async function onRequestOptions(context) {
   return new Response(null, {
     status: 204,
@@ -89,7 +79,6 @@ export async function onRequestOptions(context) {
     },
   });
 }
-
 
 function getSecurityHeaders(origin) {
   return {
