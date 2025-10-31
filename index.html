@@ -108,6 +108,7 @@
   let lastImageData=null;
   let lastLocationData=null;
   let csrfToken="";
+  let typingBubble=null;
 
   (async()=>{
     try{
@@ -129,6 +130,21 @@
     row.appendChild(b);
     chat.appendChild(row);
     chat.scrollTop=chat.scrollHeight;
+    return row;
+  }
+
+  function showTyping(){
+    if(typingBubble)return;
+    typingBubble=addMsg("<i>Typing...</i>",'bot');
+    typingBubble.querySelector('.bubble').style.opacity=0.6;
+    typingBubble.classList.add('typing');
+  }
+
+  function hideTyping(){
+    if(typingBubble){
+      typingBubble.remove();
+      typingBubble=null;
+    }
   }
 
   async function initCamera(facing='environment'){
@@ -141,8 +157,10 @@
         stream=await navigator.mediaDevices.getUserMedia({video:true});
         cameraLamp.classList.add('allowed');
       }catch(err){
-        console.error(err);
+        console.error("Camera access denied:",err);
         cameraLamp.classList.add('denied');
+        addMsg("🚫 Camera access was denied. Please allow camera permission in your browser settings.","bot");
+        return;
       }
     }
     if(stream){
@@ -155,7 +173,10 @@
   }
 
   function captureNow(){
-    if(!stream){addMsg('Camera is not available.','bot');return;}
+    if(!stream){
+      addMsg('🚫 Camera is not available or permission denied.','bot');
+      return;
+    }
     canvas.width=video.videoWidth||720;
     canvas.height=video.videoHeight||1280;
     const ctx=canvas.getContext('2d');
@@ -176,13 +197,21 @@
       addMsg(`<div><img src="${dataURL}" style="max-width:100%;border-radius:6px"></div><div class="meta"><i class='fas fa-map-marker-alt'></i> ${addr}</div><iframe class="mapFrame" loading="lazy" src="https://www.google.com/maps?q=${lat},${lon}&hl=en&z=15&output=embed"></iframe>`,'user');
     },err=>{
       locationLamp.classList.add('denied');
-      addMsg(`<div><img src="${dataURL}" style="max-width:100%;border-radius:6px"></div><div class="meta"><i class='fas fa-map-marker-alt'></i> Couldn’t get location.</div>`,'user');
+      addMsg(`<div><img src="${dataURL}" style="max-width:100%;border-radius:6px"></div><div class="meta"><i class='fas fa-map-marker-alt'></i> 📍 Location access denied or unavailable.</div>`,'user');
     },{enableHighAccuracy:true,timeout:6000});
   }
 
   async function askGPT(question){
-    const messages=[{role:"system",content:"You are a train assistant for foreign tourists in Japan."},{role:"user",content:question}];
+    const messages=[
+      {role:"system",content:"You are a Japanese station staff helping foreign visitors. 
+        If only an image is sent, confirm receipt and wait for a question.
+        Use the image and GPS data to answer questions.
+        Always give the conclusion first. Respond simply, shortly, and clearly in English. No need for follow-up questions.
+    　　Each line should be about 50 characters long.　Please take that into account and provide an easy-to-read response."},
+      {role:"user",content:question}
+    ];
     try{
+      showTyping();
       const resp=await fetch("/api",{
         method:"POST",
         headers:{
@@ -191,6 +220,7 @@
         },
         body:JSON.stringify({model:"gpt-5-mini",messages})
       });
+      hideTyping();
       if(!resp.ok){return`⚠️ API Error: HTTP ${resp.status} ${resp.statusText}`;}
       const data=await resp.json();
       if(data.error){return`⚠️ API Error: ${data.error.message||JSON.stringify(data.error)}`;}
@@ -200,6 +230,7 @@
       if(choice?.delta?.content){return choice.delta.content;}
       return"⚠️ Unexpected API response: "+JSON.stringify(data,null,2);
     }catch(err){
+      hideTyping();
       console.error("Network/API fetch error:",err);
       return"⚠️ Network error: "+(err.message||err.toString());
     }
@@ -207,7 +238,7 @@
 
   zoomInBtn.onclick=()=>{if(!currentTrack)return;const caps=currentTrack.getCapabilities?currentTrack.getCapabilities():{};if(caps.zoom){const s=currentTrack.getSettings();const next=Math.min((s.zoom||1)+0.2,caps.zoom.max);currentTrack.applyConstraints({advanced:[{zoom:next}]});}};
   zoomOutBtn.onclick=()=>{if(!currentTrack)return;const caps=currentTrack.getCapabilities?currentTrack.getCapabilities():{};if(caps.zoom){const s=currentTrack.getSettings();const next=Math.max((s.zoom||1)-0.2,caps.zoom?.min||1);currentTrack.applyConstraints({advanced:[{zoom:next}]});}};
-  flickerBtn.onclick=()=>{addMsg('Anti-flicker toggle pressed.','bot');};
+  flickerBtn.onclick=()=>{addMsg('Anti-flicker mode toggled.','bot');};
   toggleSizeBtn.onclick=()=>{previewBox.classList.toggle('expanded');};
   switchBtn.onclick=()=>{usingRear=!usingRear;initCamera(usingRear?'environment':'user');};
   captureBtn.onclick=captureNow;
@@ -223,7 +254,6 @@
 
   menuBtn.onclick=()=>{menu.style.display=(menu.style.display==='block'?'none':'block');};
   clearBtn.onclick=()=>{chat.innerHTML='';menu.style.display='none';};
-
   document.addEventListener('click',e=>{if(!menu.contains(e.target)&&e.target!==menuBtn){menu.style.display='none';}});
 
   const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
@@ -241,7 +271,7 @@
       addMsg(answer,'bot');
     };
     recognition.onerror=(event)=>{addMsg("🎤 Error: "+event.error,'bot');};
-    micBtn.onclick=()=>{recognition.start();addMsg("🎤 Listening...",'bot');};
+    micBtn.onclick=()=>{recognition.start();addMsg("🎤 Listening...","bot");};
   }else{
     micBtn.disabled=true;
     micBtn.title="Speech recognition not supported";
@@ -249,5 +279,197 @@
 
   initCamera('environment');
 </script>
+<script>
+  const video=document.getElementById('camera');
+  const chat=document.getElementById('chat');
+  const input=document.getElementById('userInput');
+  const previewBox=document.getElementById('previewBox');
+  const canvas=document.getElementById('snapshot');
+  const zoomInBtn=document.getElementById('zoomIn');
+  const zoomOutBtn=document.getElementById('zoomOut');
+  const flickerBtn=document.getElementById('flicker');
+  const toggleSizeBtn=document.getElementById('toggleSize');
+  const switchBtn=document.getElementById('switchCamera');
+  const captureBtn=document.getElementById('capture');
+  const sendBtn=document.getElementById('send');
+  const menuBtn=document.getElementById('menuBtn');
+  const menu=document.getElementById('menu');
+  const clearBtn=document.getElementById('clearBtn');
+  const micBtn=document.getElementById('micBtn');
+  const cameraLamp=document.getElementById('cameraLamp');
+  const locationLamp=document.getElementById('locationLamp');
+
+  let stream;let usingRear=true;let currentTrack;let currentZoom=1;let maxZoom=1;
+  let lastImageData=null;
+  let lastLocationData=null;
+  let csrfToken="";
+  let typingBubble=null;
+
+  (async()=>{
+    try{
+      const res=await fetch("/token");
+      const data=await res.json();
+      csrfToken=data.csrf;
+      console.log("CSRF token loaded");
+    }catch(e){
+      console.error("Failed to get CSRF token:",e);
+    }
+  })();
+
+  function addMsg(html,who='user'){
+    const row=document.createElement('div');
+    row.className='row '+(who==='user'?'user':'bot');
+    const b=document.createElement('div');
+    b.className='bubble';
+    b.innerHTML=html;
+    row.appendChild(b);
+    chat.appendChild(row);
+    chat.scrollTop=chat.scrollHeight;
+    return row;
+  }
+
+  function showTyping(){
+    if(typingBubble)return;
+    typingBubble=addMsg("<i>Typing...</i>",'bot');
+    typingBubble.querySelector('.bubble').style.opacity=0.6;
+    typingBubble.classList.add('typing');
+  }
+
+  function hideTyping(){
+    if(typingBubble){
+      typingBubble.remove();
+      typingBubble=null;
+    }
+  }
+
+  async function initCamera(facing='environment'){
+    try{
+      if(stream){stream.getTracks().forEach(t=>t.stop());}
+      stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:{exact:facing}}});
+      cameraLamp.classList.add('allowed');
+    }catch{
+      try{
+        stream=await navigator.mediaDevices.getUserMedia({video:true});
+        cameraLamp.classList.add('allowed');
+      }catch(err){
+        console.error("Camera access denied:",err);
+        cameraLamp.classList.add('denied');
+        addMsg("🚫 Camera access was denied. Please allow camera permission in your browser settings.","bot");
+        return;
+      }
+    }
+    if(stream){
+      video.srcObject=stream;
+      currentTrack=stream.getVideoTracks()[0];
+      const caps=currentTrack.getCapabilities?currentTrack.getCapabilities():{};
+      maxZoom=caps.zoom?.max||1;
+      currentZoom=currentTrack.getSettings().zoom||1;
+    }
+  }
+
+  function captureNow(){
+    if(!stream){
+      addMsg('🚫 Camera is not available or permission denied.','bot');
+      return;
+    }
+    canvas.width=video.videoWidth||720;
+    canvas.height=video.videoHeight||1280;
+    const ctx=canvas.getContext('2d');
+    ctx.drawImage(video,0,0,canvas.width,canvas.height);
+    const dataURL=canvas.toDataURL('image/jpeg',0.9);
+    lastImageData=dataURL;
+
+    navigator.geolocation.getCurrentPosition(async pos=>{
+      const lat=pos.coords.latitude,lon=pos.coords.longitude;
+      locationLamp.classList.add('allowed');
+      let addr=`${lat.toFixed(5)}, ${lon.toFixed(5)}`;
+      try{
+        const r=await fetch(`https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lon}`,{headers:{"User-Agent":"TrainAssistant/1.0"}});
+        const j=await r.json();
+        if(j.display_name)addr=j.display_name;
+      }catch(e){}
+      lastLocationData={lat,lon,address:addr};
+      addMsg(`<div><img src="${dataURL}" style="max-width:100%;border-radius:6px"></div><div class="meta"><i class='fas fa-map-marker-alt'></i> ${addr}</div><iframe class="mapFrame" loading="lazy" src="https://www.google.com/maps?q=${lat},${lon}&hl=en&z=15&output=embed"></iframe>`,'user');
+    },err=>{
+      locationLamp.classList.add('denied');
+      addMsg(`<div><img src="${dataURL}" style="max-width:100%;border-radius:6px"></div><div class="meta"><i class='fas fa-map-marker-alt'></i> 📍 Location access denied or unavailable.</div>`,'user');
+    },{enableHighAccuracy:true,timeout:6000});
+  }
+
+  async function askGPT(question){
+    const messages=[
+      {role:"system",content:"You are a Japanese station staff helping foreign visitors. Always respond briefly and clearly in English."},
+      {role:"user",content:question}
+    ];
+    try{
+      showTyping();
+      const resp=await fetch("/api",{
+        method:"POST",
+        headers:{
+          "Content-Type":"application/json",
+          "x-csrf-token":csrfToken
+        },
+        body:JSON.stringify({model:"gpt-5-mini",messages})
+      });
+      hideTyping();
+      if(!resp.ok){return`⚠️ API Error: HTTP ${resp.status} ${resp.statusText}`;}
+      const data=await resp.json();
+      if(data.error){return`⚠️ API Error: ${data.error.message||JSON.stringify(data.error)}`;}
+      const choice=data.choices?.[0];
+      if(choice?.message?.content){return choice.message.content;}
+      if(choice?.message?.[0]?.text){return choice.message[0].text;}
+      if(choice?.delta?.content){return choice.delta.content;}
+      return"⚠️ Unexpected API response: "+JSON.stringify(data,null,2);
+    }catch(err){
+      hideTyping();
+      console.error("Network/API fetch error:",err);
+      return"⚠️ Network error: "+(err.message||err.toString());
+    }
+  }
+
+  zoomInBtn.onclick=()=>{if(!currentTrack)return;const caps=currentTrack.getCapabilities?currentTrack.getCapabilities():{};if(caps.zoom){const s=currentTrack.getSettings();const next=Math.min((s.zoom||1)+0.2,caps.zoom.max);currentTrack.applyConstraints({advanced:[{zoom:next}]});}};
+  zoomOutBtn.onclick=()=>{if(!currentTrack)return;const caps=currentTrack.getCapabilities?currentTrack.getCapabilities():{};if(caps.zoom){const s=currentTrack.getSettings();const next=Math.max((s.zoom||1)-0.2,caps.zoom?.min||1);currentTrack.applyConstraints({advanced:[{zoom:next}]});}};
+  flickerBtn.onclick=()=>{addMsg('Anti-flicker mode toggled.','bot');};
+  toggleSizeBtn.onclick=()=>{previewBox.classList.toggle('expanded');};
+  switchBtn.onclick=()=>{usingRear=!usingRear;initCamera(usingRear?'environment':'user');};
+  captureBtn.onclick=captureNow;
+
+  sendBtn.onclick=async()=>{
+    const t=input.value.trim();
+    if(!t)return;
+    addMsg(t,'user');
+    input.value='';
+    const answer=await askGPT(t);
+    addMsg(answer,'bot');
+  };
+
+  menuBtn.onclick=()=>{menu.style.display=(menu.style.display==='block'?'none':'block');};
+  clearBtn.onclick=()=>{chat.innerHTML='';menu.style.display='none';};
+  document.addEventListener('click',e=>{if(!menu.contains(e.target)&&e.target!==menuBtn){menu.style.display='none';}});
+
+  const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+  let recognition;
+  if(SR){
+    recognition=new SR();
+    recognition.lang='en-US';
+    recognition.continuous=false;
+    recognition.interimResults=false;
+    recognition.onresult=async(event)=>{
+      const transcript=event.results[0][0].transcript;
+      input.value=transcript;
+      addMsg(transcript,'user');
+      const answer=await askGPT(transcript);
+      addMsg(answer,'bot');
+    };
+    recognition.onerror=(event)=>{addMsg("🎤 Error: "+event.error,'bot');};
+    micBtn.onclick=()=>{recognition.start();addMsg("🎤 Listening...","bot");};
+  }else{
+    micBtn.disabled=true;
+    micBtn.title="Speech recognition not supported";
+  }
+
+  initCamera('environment');
+</script>
+
 </body>
 </html>
