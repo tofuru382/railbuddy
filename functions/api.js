@@ -39,7 +39,7 @@ You may also use markdown line breaks (double space + newline) or full paragraph
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "gpt-5-mini",
+        model: "gpt-5",
         messages: body.messages,
       }),
     });
