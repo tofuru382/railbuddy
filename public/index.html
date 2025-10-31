@@ -145,7 +145,7 @@
     }
 
     async function askGPT(question){
-      const messages=[{role:"system",content:"You are a Japanese station staff helping foreign visitors. Always respond briefly and clearly in English."},{role:"user",content:question}];
+      const messages=[{role:"system",content:"You are a Japanese station staff helping foreign visitors.If only an image is sent, confirm receipt and wait for a question.Use the image and GPS data to answer questions.Always give the conclusion first.Respond simply, shortly, and clearly in English.No need for follow-up questions. Each line should be about 50 characters long.Please take that into account and provide an easy-to-read response."},{role:"user",content:question}];
       try{showTyping();
         const resp=await fetch("/api",{method:"POST",headers:{"Content-Type":"application/json","x-csrf-token":csrfToken},body:JSON.stringify({model:"gpt-5-mini",messages})});
         hideTyping();
