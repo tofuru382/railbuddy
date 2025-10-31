@@ -1,80 +1,76 @@
-
-
 export async function onRequestPost(context) {
   try {
     const body = await context.request.json();
 
-    // ---- Station staff system prompt ----
-    const systemPrompt = `
-You are a Japanese station staff helping foreign visitors.
-If only an image is sent, confirm receipt and wait for a question.
-Use the image and GPS data to answer questions.
-Always give the conclusion first.
-Respond simply , shortly and clearly in English.
-No need for follow-up questions
-use normal spaces (" ")
+   
+    const allowedOrigin = "https://railbuddy.pages.dev";
+    const requestOrigin = context.request.headers.get("Origin");
 
-multiple spaces (" ")
-
-line breaks (\n)
-
-markdown line breaks (double space + newline)
-
-full paragraphs or code blocks
- `;
-
-    // ---- Inject prompt if missing ----
-    if (Array.isArray(body.messages)) {
-      const hasSystem = body.messages.some(m => m.role === "system");
-      if (!hasSystem) {
-        body.messages.unshift({ role: "system", content: systemPrompt });
-      }
-    } else {
-      body.messages = [{ role: "system", content: systemPrompt }];
+    if (requestOrigin !== allowedOrigin) {
+      return new Response("CORS Error: Unauthorized origin", { status: 403 });
     }
 
-    // ---- Send request to OpenAI (no unsupported parameters) ----
+    
+    const csrfHeader = context.request.headers.get("x-csrf-token");
+    const expectedToken = context.env.CSRF_SECRET; // store secret in environment variable
+
+    if (!csrfHeader || csrfHeader !== expectedToken) {
+      return new Response("CSRF validation failed", { status: 403 });
+    }
+
+    
     const resp = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
       headers: {
         "Authorization": `Bearer ${context.env.OPEN_AI_API_KEY}`,
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({
-        model: "gpt-5-mini",
-        messages: body.messages,
-      }),
+      body: JSON.stringify(body),
     });
 
-    const data = await resp.json();
+    const text = await resp.text();
 
-    if (!resp.ok) {
-      console.error("OpenAI API error:", data);
-      return new Response(JSON.stringify({ error: data.error || data }), {
-        status: resp.status,
+
+    const securityHeaders = {
+      "Content-Type": "application/json",
+      "Access-Control-Allow-Origin": allowedOrigin,
+      "Access-Control-Allow-Methods": "POST, OPTIONS",
+      "Access-Control-Allow-Headers": "Content-Type, x-csrf-token",
+      "Strict-Transport-Security": "max-age=63072000; includeSubDomains; preload",
+      "X-Content-Type-Options": "nosniff",
+      "X-Frame-Options": "DENY",
+      "X-XSS-Protection": "1; mode=block",
+      "Referrer-Policy": "strict-origin-when-cross-origin",
+      "Permissions-Policy": "camera=(), microphone=(), geolocation=()",
+    };
+
+    return new Response(text, { status: resp.status, headers: securityHeaders });
+
+  } catch (err) {
+    return new Response(
+      JSON.stringify({ error: err.message }),
+      {
+        status: 500,
         headers: {
           "Content-Type": "application/json",
           "Access-Control-Allow-Origin": "https://railbuddy.pages.dev",
+          "Access-Control-Allow-Methods": "POST, OPTIONS",
+          "Access-Control-Allow-Headers": "Content-Type, x-csrf-token",
         },
-      });
-    }
-
-    // ---- Return response to client ----
-    return new Response(JSON.stringify(data), {
-      headers: {
-        "Content-Type": "application/json",
-        "Access-Control-Allow-Origin": "https://railbuddy.pages.dev",
-      },
-    });
-
-  } catch (err) {
-    console.error("Worker error:", err);
-    return new Response(JSON.stringify({ error: err.message }), {
-      status: 500,
-      headers: {
-        "Content-Type": "application/json",
-        "Access-Control-Allow-Origin": "https://railbuddy.pages.dev",
-      },
-    });
+      }
+    );
   }
+}
+
+
+export async function onRequestOptions(context) {
+  return new Response(null, {
+    status: 204,
+    headers: {
+      "Access-Control-Allow-Origin": "https://railbuddy.pages.dev",
+      "Access-Control-Allow-Methods": "POST, OPTIONS",
+      "Access-Control-Allow-Headers": "Content-Type, x-csrf-token",
+      "Access-Control-Max-Age": "86400",
+    },
+  });
 }
