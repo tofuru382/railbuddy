@@ -164,7 +164,7 @@
           "Content-Type":"application/json",
           "x-csrf-token":csrfToken
         },
-        body:JSON.stringify({model:"gpt-5-mini",messages})
+        body:JSON.stringify({model:"gpt-5-nano",messages})
       });
       hideTyping();
       if(!resp.ok)return`⚠️ API Error: HTTP ${resp.status} ${resp.statusText}`;
