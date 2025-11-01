@@ -148,12 +148,32 @@
 
   async function askGPT(question){
     let userContent=[{type:"text",text:question}];
-    if(lastImageData){userContent.push({type:"image_url",image_url:lastImageData});}
-    if(lastLocationData){userContent.push({type:"text",text:`Location: ${lastLocationData.address}`});}
+    if(lastImageData){
+      userContent.push({
+        type:"image_url",
+        image_url: { url: lastImageData }
+      });
+    }
+    if(lastLocationData){
+      userContent.push({
+        type:"text",
+        text:`Location: ${lastLocationData.address}`
+      });
+    }
 
     const messages=[
-      {role:"system",content:"You are a Japanese station staff helping foreign visitors.If only an image is sent, confirm receipt and wait for a question.Use the image and GPS data to answer questions.Always give the conclusion first.Respond simply, shortly, and clearly in English.No need for follow-up questions.Each line should be about 50 characters long.Please take that into account and provide an easy-to-read response."},
-      {role:"user",content:userContent}
+      {
+        role:"system",
+        content:`You are a Japanese station staff helping foreign visitors.
+If only an image is sent, confirm receipt and wait for a question.
+Use the image and GPS data to answer questions.
+Always give the conclusion first.
+Respond simply, shortly, and clearly in English.
+No need for follow-up questions.
+Each line should be about 50 characters long.
+Please take that into account and provide an easy-to-read response.`
+      },
+      { role:"user", content:userContent }
     ];
 
     try{
@@ -164,19 +184,29 @@
           "Content-Type":"application/json",
           "x-csrf-token":csrfToken
         },
-        body:JSON.stringify({model:"gpt-5",messages})
+        body:JSON.stringify({ model:"gpt-5-mini", messages })
       });
+
       hideTyping();
-      if(!resp.ok)return`⚠️ API Error: HTTP ${resp.status} ${resp.statusText}`;
+
+      if(!resp.ok){
+        return `⚠️ API Error: HTTP ${resp.status} ${resp.statusText}`;
+      }
+
       const data=await resp.json();
-      if(data.error)return`⚠️ API Error: ${data.error.message||JSON.stringify(data.error)}`;
+
+      if(data.error){
+        return `⚠️ API Error: ${data.error.message || JSON.stringify(data.error)}`;
+      }
+
       const choice=data.choices?.[0];
-      if(choice?.message?.content)return choice.message.content;
-      return"⚠️ Unexpected API response: "+JSON.stringify(data,null,2);
-    }catch(err){
+      if(choice?.message?.content) return choice.message.content;
+      return "⚠️ Unexpected API response: " + JSON.stringify(data,null,2);
+    }
+    catch(err){
       hideTyping();
       console.error("Network/API fetch error:",err);
-      return"⚠️ Network error: "+(err.message||err.toString());
+      return "⚠️ Network error: " + (err.message||err.toString());
     }
   }
 
@@ -223,6 +253,7 @@
 
   initCamera('environment');
 </script>
+
 
 </body>
 </html>
